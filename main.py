@@ -1,6 +1,8 @@
 import time
+import random
 import webbrowser
 import threading
+import tkinter as tk
 from tkinter import Tk, Canvas
 from pynput import keyboard
 import ctypes
@@ -13,9 +15,11 @@ CHEESEBURGERPLS = 0 #Mcdonald job application lvl
 BRIGHTFUTUREAHEAD = 100 #max bar lvl
 CHECK_INTERVAL = 0.1 #ui refresh speed
 
-MCDO_URL1= "https://www.mchire.com/co/McDonalds2692/Job?job_id=PDX_MC_5D0FA666-7DC8-4EB2-81DA-B39422F01A7E_69251"
-MCDO_URL2 = "https://www.wikihow.com/Apply-at-McDonald%27s"
-MCDO_URL3 = "https://images.steamusercontent.com/ugc/28812445891088273/80FBC4918DFB81B32D71551D0CE30EB21283A695/"
+MCDO_URLS = [
+            "https://jobs.mchire.com/jobs?location_name=Shelburne%2C%20VT%2C%20USA&location_type=2&keyword=crew",
+            "https://www.wikihow.com/Apply-at-McDonald%27s",
+            "https://images.steamusercontent.com/ugc/28812445891088273/80FBC4918DFB81B32D71551D0CE30EB21283A695/"
+]
 
 productivity = BRIGHTFUTUREAHEAD
 last_activity = time.time()
@@ -24,34 +28,67 @@ warning_triggered = False
 #ui
 root = Tk()
 root.title("Productivity Bar")
-root.geometry("500x80")
+root.geometry("500x135")
 root.resizable(False, False)
 
-canvas = Canvas(root, width=500, height=80, bg="#1e1e1e", highlightthickness=0)
+canvas = Canvas(root, width=500, height=75, bg="#1e1e1e", highlightthickness=0)
 canvas.pack()
 
+#(un)employment rate slider
+slider_frame = tk.Frame(root, bg = "#1e1e1e", highlightthickness=0, bd = 0)
+slider_frame.pack(fill = "x", pady = 0)
+
+def update_loss_speed(value):
+    global LOSS_SPEED
+    LOSS_SPEED = float(value)
+
+loss_slider = tk.Scale(
+    master = slider_frame,
+    from_ = 0.1,
+    to = 3.0,
+    resolution = 0.1,
+    orient = "horizontal",
+    length = 480,
+    font = ("Arial", 11),
+    label = "(un)emlpoyment rate",
+    command = update_loss_speed,
+    bg = "#1e1e1e",
+    fg = "#ffffff",
+    troughcolor = "#333333",
+    highlightthickness = 0
+)
+loss_slider.set(LOSS_SPEED)
+loss_slider.pack(pady=5)
+
+#productivity bar
 def draw_bar():
-    """Redraw the productivity bar UI"""
     canvas.delete("all")
-    
     pct = max(0, min(productivity, BRIGHTFUTUREAHEAD)) / BRIGHTFUTUREAHEAD
-    bar_width = int(pct*480)
+    bar_width = int(pct * 480)
+    #↓bar color gradually changes based on productivity percentage↓
+    if pct >= 0.5:
+        t = (pct - 0.5) * 2
+        r = int(255 * (1-t))
+        g = 255
+        b = 0
+    else:
+        t = pct * 2
+        r = 255
+        g = int(255 * t)
+        b  = 0
+    
+    color = f"#{r:02x}{g:02x}{b:02x}"
 
     canvas.create_rectangle(10, 30, 490, 60, fill="#333333", outline="")
-    if pct > 0.6:
-        color = "#4caf50"
-    elif pct > 0.3:
-        color = "#ddc107"
-    else:
-        color = "#f44336"
-
     canvas.create_rectangle(10, 30, 10 + bar_width, 60, fill=color, outline="")
-    canvas.create_text( 
+
+    canvas.create_text(
         250, 15,
         text=f"Productivity: {int(productivity)}%",
-        fill="white",
-        font=("Arial", 12, "bold")
+        fill="#ffffff",
+        font = ("Arial", 12, "bold")
     )
+                             
 
 #keyboard tracking
 def on_key_press(key):
@@ -68,27 +105,33 @@ def update_loop():
     while True:
         time.sleep(CHECK_INTERVAL)
         idle_time = time.time() - last_activity
-        productivity -= LOSS_SPEED * idle_time * CHECK_INTERVAL
-
+        if idle_time > 1.0:
+            productivity -= LOSS_SPEED
+        else:
+            productivity = min(BRIGHTFUTUREAHEAD, productivity + GAIN_SPEED * CHECK_INTERVAL)
+        productivity -= LOSS_SPEED * CHECK_INTERVAL
         productivity = max(CHEESEBURGERPLS, min(BRIGHTFUTUREAHEAD, productivity))
+
+        #warning pop-up
         if productivity <= GETAJOB and not warning_triggered:
             warning_triggered = True
-            ctypes.windl.user32.MesssageBoxW(
+            ctypes.windll.user32.MessageBoxW(
                 0,
-                "⚠️ WARNING: Your screen seems to be brighter than your future.\n"
-                "Return to work before you end up at the nearest McDonald®.\n"
-                "Productivity Alert provided by the Productivity Enhancer 3000™",
+                "!WARNING⚠️: Your screen seems to be brighter than your foreseeable future⚠️\n"
+                ".Return to work before you end up at the nearest McDonald® in a 10km radius\n"
+                "™This alert has been issued to you by the US Department of Homeland Security",
                 0
             )
 
-            if productivity <= CHEESEBURGERPLS:
-                webbrowser.open(MCDO_URL1)
-                warning_triggered = False
-                productivity = BRIGHTFUTUREAHEAD #productivity resets after mcdonald application
+        if productivity <= CHEESEBURGERPLS:
+            url = random.choice(MCDO_URLS)
+            webbrowser.open(url)
+            warning_triggered = False
+            productivity = BRIGHTFUTUREAHEAD #productivity resets after mcdonald application
 
-                draw_bar()
+        root.after(0, draw_bar)
 
-            threading.Thread(target=update_loop, daemon = True).start()
+threading.Thread(target=update_loop, daemon = True).start()
 
-            draw_bar()
-            root.mainloop()
+draw_bar()
+root.mainloop()
